@@ -58,7 +58,7 @@ public class MapBaker : IMapBaker
         
         //Get nodes that are within the bounding box.
         var nodesWithinBounds = new List<MapNode>();
-        foreach (var node in pathfindingMap.Nodes)
+        foreach (var node in pathfindingMap.Nodes.SelectMany(list => list))
         {
             if (IsWithinBoundingBoxInclusive(node.Position, upperRightBoundingCorner, bottomLeftBoundingCorner))
             {
@@ -113,6 +113,19 @@ public class MapBaker : IMapBaker
 
     private float GetSquaredDistanceOfPointFromLine(Line line, Vector2 point)
     {
-        
+        var lineVector = line.PointB - line.PointA;
+        var sideVector = point - line.PointA;
+        var crossProduct = CrossProduct(new Vector3(lineVector, 0), new Vector3(sideVector, 0));
+        //Cross product for area / base length of parallelogram.
+        return crossProduct.LengthSquared() / lineVector.LengthSquared();
+    }
+    
+    public static Vector3 CrossProduct(Vector3 v1, Vector3 v2)
+    {
+        var x = v1.Y * v2.Z - v2.Y * v1.Z;
+        var y = (v1.X * v2.Z - v2.X * v1.Z) * -1;
+        var z = v1.X * v2.Y - v2.X * v1.Y;
+
+        return new Vector3(x, y, z);
     }
 }

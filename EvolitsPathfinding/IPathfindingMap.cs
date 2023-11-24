@@ -29,9 +29,9 @@ public interface IPathfindingMap
     float NavigatorRadius { get; protected set; }
 
     /// <summary>
-    /// INodes that make up the map. Ordered from left to right, then top to bottom.
+    /// INodes that make up the map. Down then across so iteration is y-loop inside of x-loop.
     /// </summary>
-    IReadOnlyList<MapNode> Nodes { get; }
+    IReadOnlyList<IReadOnlyList<MapNode>> Nodes { get; }
     
     /// <summary>
     /// Number of IObstacles baked into the map.
@@ -39,7 +39,7 @@ public interface IPathfindingMap
     int ObstaclesBaked { get; protected set; }
 
     /// <summary>
-    /// Calculates a path for this IPathfindingMap.
+    /// Calculates a path for this IPathfindingMap. Returns an empty list if a path could not be found.
     /// </summary>
     /// <param name="startPoint">Starting point of the path.</param>
     /// <param name="endPoint">Ending point of the path.</param>
@@ -52,8 +52,4 @@ public interface IPathfindingMap
     /// <param name="obstacle">IObstacle to bake.</param>
     /// <returns>Whether baking succeeded.</returns>
     bool BakeObstacle(IObstacle obstacle);
-    
-    string Serialize();
-
-    string Deserialize();
 }

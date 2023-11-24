@@ -5,23 +5,38 @@ namespace EvolitsPathfinding;
 public class MapNode
 {
     /// <summary>
-    /// Position of the Node on the IMap.
+    /// Position of the node on the cartesian plane.
     /// </summary>
     public Vector2 Position { get; private set; }
+    
+    /// <summary>
+    /// Index of the node in the IPathfindingMap's outer list.
+    /// </summary>
+    public int IndexX { get; private set; }
+    
+    /// <summary>
+    /// Index of the node in the IPathfindingMap's inner list.
+    /// </summary>
+    public int IndexY { get; private set; }
 
     /// <summary>
-    /// Whether the INode is traversable terrain.
+    /// Whether the node is traversable terrain.
     /// </summary>
     public bool IsObstacle { get; set; }
 
-    /// <summary>
-    /// The nodes that surround this node with zero index being north (positive y) and going clockwise.
-    /// </summary>
-    public MapNode[] SurroundingNodes { get; set; } = new MapNode[8];
+    public float Cost { get; set; } = 0;
 
-    public MapNode(Vector2 position)
+    public float DistanceFromStart { get; set; } = 0;
+
+    public float Heuristic { get; set; } = 0;
+
+    public MapNode Parent { get; set; }
+
+    public MapNode(Vector2 position, int indexX, int indexY)
     {
         Position = position;
+        IndexX = indexX;
+        IndexY = indexY;
         IsObstacle = false;
     }
 }
