@@ -21,9 +21,9 @@ public class PathfindingMap : IPathfindingMap
     
     public int ObstaclesBaked { get; set; }
 
-    private int _resolution;
+    private readonly int _resolution;
     
-    private static float _rootTwo = MathF.Sqrt(2f);
+    private static readonly float RootTwo = MathF.Sqrt(2f);
 
     /// <summary>
     /// Constructs a map that can be used to produce paths for a navigating agent of a certain radius.
@@ -45,11 +45,11 @@ public class PathfindingMap : IPathfindingMap
         _resolution = resolution;
     }
     
-    public IList<Vector2> GetPath(Vector2 startPoint, Vector2 endPoint)
+    public IEnumerable<Vector2> GetPath(Vector2 startPoint, Vector2 endPoint)
     {
         List<MapNode> openList = new();
         List<MapNode> closedList = new();
-        var halfInverseResolution = 1 / _resolution * 2;
+        var halfInverseResolution = 1f / _resolution * 2f;
         
         //Reset nodes.
         foreach (var node in _nodes.SelectMany(list => list))
@@ -57,15 +57,16 @@ public class PathfindingMap : IPathfindingMap
             node.Cost = 0;
             node.DistanceFromStart = 0;
             node.Heuristic = 0;
+            node.IsPath = false;
         }
         
         //Find starting node.
-        MapNode startingNode = null;
+        MapNode? startingNode = null;
         for (var x = 0; x < _nodes.Count; x++)
         {
             if (_nodes[x].First().Position.X > startPoint.X + halfInverseResolution) continue;
             if (_nodes[x].First().Position.X < startPoint.X - halfInverseResolution) continue;
-            for (var y = 0; y < _nodes.Count; x++)
+            for (var y = 0; y < _nodes[x].Count; y++)
             {
                 if (_nodes[x][y].Position.Y > startPoint.Y + halfInverseResolution) continue;
                 if (_nodes[x][y].Position.Y < startPoint.Y - halfInverseResolution) continue;
@@ -77,12 +78,12 @@ public class PathfindingMap : IPathfindingMap
         }
         
         //Find target node.
-        MapNode targetNode = null;
+        MapNode? targetNode = null;
         for (var x = 0; x < _nodes.Count; x++)
         {
             if (_nodes[x].First().Position.X > endPoint.X + halfInverseResolution) continue;
             if (_nodes[x].First().Position.X < endPoint.X - halfInverseResolution) continue;
-            for (var y = 0; y < _nodes.Count; x++)
+            for (var y = 0; y < _nodes[x].Count; y++)
             {
                 if (_nodes[x][y].Position.Y > endPoint.Y + halfInverseResolution) continue;
                 if (_nodes[x][y].Position.Y < endPoint.Y - halfInverseResolution) continue;
@@ -120,6 +121,7 @@ public class PathfindingMap : IPathfindingMap
             for (var i = 0; i < adjacentNodes.Length; i++)
             {
                 var adjNode = adjacentNodes[i];
+                if (adjNode == null) continue;
                 if (adjNode.IsObstacle) continue;
                 if (closedList.Contains(adjNode)) continue;
                 if (!openList.Contains(adjNode))
@@ -128,7 +130,7 @@ public class PathfindingMap : IPathfindingMap
                     openList.Add(adjNode);
                     adjNode.Parent = currentNode;
                     //Use root 2 for diagonal distances.
-                    adjNode.DistanceFromStart = currentNode.DistanceFromStart + (i % 2 == 1 ? _rootTwo : 1);
+                    adjNode.DistanceFromStart = currentNode.DistanceFromStart + (i % 2 == 1 ? RootTwo : 1);
                     adjNode.Heuristic = new Vector2(targetNode.IndexX - adjNode.IndexX,
                         targetNode.IndexY - adjNode.IndexY).LengthSquared();
                     adjNode.Cost = adjNode.DistanceFromStart + adjNode.Heuristic;
@@ -138,7 +140,7 @@ public class PathfindingMap : IPathfindingMap
                     //Reroute if an adjacent open node is easier to reach through the current node.
                     if (adjNode.DistanceFromStart <= currentNode.DistanceFromStart) continue;
                     adjNode.Parent = currentNode;
-                    adjNode.DistanceFromStart = currentNode.DistanceFromStart + (i % 2 == 1 ? _rootTwo : 1);
+                    adjNode.DistanceFromStart = currentNode.DistanceFromStart + (i % 2 == 1 ? RootTwo : 1);
                     adjNode.Cost = adjNode.DistanceFromStart + adjNode.Heuristic;
                 }
             }
@@ -148,31 +150,41 @@ public class PathfindingMap : IPathfindingMap
         var retVal = new List<Vector2>();
         if (!openList.Contains(targetNode)) return retVal;
         var iteratedNode = targetNode;
-        while (iteratedNode != startingNode)
+        while (iteratedNode != startingNode && iteratedNode != null)
         {
-            retVal.Add(iteratedNode.Position);
+            //We only add path vectors that are contacting obstacles as they are the points that matter to the path.
+            if (iteratedNode == targetNode || GetAdjacentNodes(iteratedNode.IndexX, iteratedNode.IndexY).Any(node => node is { IsObstacle: true }))
+            {
+                retVal.Add(iteratedNode.Position);
+                iteratedNode.IsPath = true;
+            }
+
             iteratedNode = iteratedNode.Parent;
         }
+        retVal.Add(startingNode.Position);
+        startingNode.IsPath = true;
         retVal.Reverse();
         return retVal;
     }
 
     public bool BakeObstacle(IObstacle obstacle)
     {
-        return Baker.BakeObstacle(obstacle, this);
+        if (!Baker.BakeObstacle(obstacle, this)) return false;
+        ObstaclesBaked++;
+        return true;
     }
 
     private void InitializeNodes(int resolution)
     {
         if (resolution <= 0)
             throw new Exception("Tried to create pathfinding map with a resolution of less or equal to 0.");
-        var inverseResolution = 1 / resolution;
+        var inverseResolution = 1f / resolution;
         //Create nodes based on the resolution.
         var indexX = 0;
-        var indexY = 0;
         for (var x = BottomLeftBoundary.X; x < UpperRightBoundary.X; x += inverseResolution)
         {
             _nodes.Add(new List<MapNode>());
+            var indexY = 0;
             for (var y = BottomLeftBoundary.Y; y < UpperRightBoundary.Y; y += inverseResolution)
             {
                 _nodes.Last().Add(new MapNode(new Vector2(x, y), indexX, indexY));
@@ -188,22 +200,22 @@ public class PathfindingMap : IPathfindingMap
     /// <param name="x">X or outer loop index of the node.</param>
     /// <param name="y">Y or inner loop index of the node.</param>
     /// <returns></returns>
-    private MapNode[] GetAdjacentNodes(int x, int y)
+    private MapNode?[] GetAdjacentNodes(int x, int y)
     {
-        var retVal = new MapNode[8];
+        if (x < 0 || y < 0 || x >= _nodes.Count || y >= _nodes.First().Count) throw new Exception("Tried to get adjacent nodes of a node that doesn't exist.");
+        var retVal = new MapNode?[8];
         var topEdgeExists = y + 1 < _nodes.First().Count;
         var leftEdgeExists = x > 0;
         var rightEdgeExists = x + 1 < _nodes.Count;
         var bottomEdgeExists = y > 0;
-        retVal[0] = (topEdgeExists ? _nodes[x][y + 1] : null) ?? throw new Exception("Map has missing node.");
-        retVal[1] = (topEdgeExists && rightEdgeExists ? _nodes[x + 1][y + 1] : null) ??
-                    throw new Exception("Map has missing node.");
-        retVal[2] = (rightEdgeExists ? _nodes[x + 1][y] : null) ?? throw new Exception("Map has missing node.");
-        retVal[3] = (bottomEdgeExists && rightEdgeExists ? _nodes[x + 1][y - 1] : null) ?? throw new Exception("Map has missing node.");
-        retVal[4] = (bottomEdgeExists ? _nodes[x][y - 1] : null) ?? throw new Exception("Map has missing node.");
-        retVal[5] = (bottomEdgeExists && leftEdgeExists ? _nodes[x - 1][y - 1] : null) ?? throw new Exception("Map has missing node.");
-        retVal[6] = (leftEdgeExists ? _nodes[x - 1][y] : null) ?? throw new Exception("Map has missing node.");
-        retVal[7] = (topEdgeExists && leftEdgeExists ? _nodes[x - 1][y + 1] : null) ?? throw new Exception("Map has missing node.");
+        retVal[0] = topEdgeExists ? _nodes[x][y + 1] : null;
+        retVal[1] = topEdgeExists && rightEdgeExists ? _nodes[x + 1][y + 1] : null;
+        retVal[2] = rightEdgeExists ? _nodes[x + 1][y] : null;
+        retVal[3] = bottomEdgeExists && rightEdgeExists ? _nodes[x + 1][y - 1] : null;
+        retVal[4] = bottomEdgeExists ? _nodes[x][y - 1] : null;
+        retVal[5] = bottomEdgeExists && leftEdgeExists ? _nodes[x - 1][y - 1] : null;
+        retVal[6] = leftEdgeExists ? _nodes[x - 1][y] : null;
+        retVal[7] = topEdgeExists && leftEdgeExists ? _nodes[x - 1][y + 1] : null;
         return retVal;
     }
 }

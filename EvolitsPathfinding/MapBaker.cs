@@ -21,16 +21,20 @@ public class MapBaker : IMapBaker
 {
     public bool BakeObstacle(IObstacle obstacle, IPathfindingMap pathfindingMap)
     {
+        //We translate the corner coordinates of the obstacle by the position to get corner coordinates relative to the map.
+
+        var cornersInMapSpace = obstacle.Corners.Select(corner => corner + obstacle.Position).ToList();
+        
         //Get the bounding box of the obstacle to eliminate nodes that are definitely not within the area.
         
         Vector2 upperRightBoundingCorner;
         Vector2 bottomLeftBoundingCorner;
-        upperRightBoundingCorner.X = float.MaxValue;
-        upperRightBoundingCorner.Y = float.MaxValue;
-        bottomLeftBoundingCorner.X = float.MinValue;
-        bottomLeftBoundingCorner.Y = float.MinValue;
+        upperRightBoundingCorner.X = float.MinValue;
+        upperRightBoundingCorner.Y = float.MinValue;
+        bottomLeftBoundingCorner.X = float.MaxValue;
+        bottomLeftBoundingCorner.Y = float.MaxValue;
 
-        foreach (var point in obstacle.Corners)
+        foreach (var point in cornersInMapSpace)
         {
             if (point.X > upperRightBoundingCorner.X)
             {
@@ -49,6 +53,10 @@ public class MapBaker : IMapBaker
                 bottomLeftBoundingCorner.Y = point.Y;
             }
         }
+        
+        //Extend by the navigator radius as we bake the navigator radius into the map instead of calculating during pathfinding.
+        upperRightBoundingCorner += new Vector2(pathfindingMap.NavigatorRadius, pathfindingMap.NavigatorRadius);
+        bottomLeftBoundingCorner -= new Vector2(pathfindingMap.NavigatorRadius, pathfindingMap.NavigatorRadius);
 
         //Check if bounding box is within the map.
         if (!IsWithinBoundingBoxInclusive(bottomLeftBoundingCorner, pathfindingMap.UpperRightBoundary,
@@ -74,28 +82,37 @@ public class MapBaker : IMapBaker
         var navRadiusSquared = pathfindingMap.NavigatorRadius * pathfindingMap.NavigatorRadius;
         //Save data about the line made by the points for reuse.
         List<Line> lines = new();
-        for (var i = 0; i < obstacle.Corners.Count; i++)
+        for (var i = 0; i < cornersInMapSpace.Count; i++)
         {
-            var current = obstacle.Corners[i];
-            var next = i + 1 < obstacle.Corners.Count ? obstacle.Corners[i + 1] : obstacle.Corners[0];
+            var current = cornersInMapSpace[i];
+            var next = i + 1 < cornersInMapSpace.Count ? cornersInMapSpace[i + 1] : cornersInMapSpace[0];
             lines.Add(new Line(current, next));
         }
         foreach (var node in nodesWithinBounds)
         {
             //First we know the node is in the polygon area if it is within the radius of any of the points.
-            foreach (var point in obstacle.Corners)
+            foreach (var point in cornersInMapSpace)
             {
                 if ((node.Position - point).LengthSquared() > navRadiusSquared) continue;
                 node.IsObstacle = true;
                 break;
             }
             
-            //Then for the closest line on the polygon, we check if it is within the radius distance from the closest line.
-            var closestLine = lines.MinBy(line => (line.PointA - node.Position).LengthSquared() + (line.PointB - node.Position).LengthSquared());
-            //Check distance and make non-traversable if close enough.
-            if (GetSquaredDistanceOfPointFromLine(closestLine, node.Position) <= navRadiusSquared)
+            //Then for the each line on the polygon, we check if it is within the radius distance of the node.
+            foreach (var line in lines)
             {
+                //Check if node is on a tangent to the line.
+                var lineVector = line.PointB - line.PointA;
+                var tangentVector = new Vector2(-lineVector.Y, lineVector.X);
+                var pointAVector = node.Position - line.PointA;
+                var pointBVector = node.Position - line.PointB;
+                if (CrossProduct(new Vector3(tangentVector, 0), new Vector3(pointAVector, 0)).Z > 0) continue;
+                if (CrossProduct(new Vector3(tangentVector, 0), new Vector3(pointBVector, 0)).Z < 0) continue;
+                //Check distance and make non-traversable if close enough.
+                if (GetSquaredDistanceOfPointFromLine(line, node.Position) > navRadiusSquared) continue;
                 node.IsObstacle = true;
+                //Don't need to keep checking if it is already inside a line.
+                break;
             }
         }
 

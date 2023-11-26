@@ -24,13 +24,15 @@ public class MapNode
     /// </summary>
     public bool IsObstacle { get; set; }
 
-    public float Cost { get; set; } = 0;
+    public float Cost { get; set; }
 
-    public float DistanceFromStart { get; set; } = 0;
+    public float DistanceFromStart { get; set; }
 
-    public float Heuristic { get; set; } = 0;
+    public float Heuristic { get; set; }
 
-    public MapNode Parent { get; set; }
+    public MapNode? Parent { get; set; }
+
+    public bool IsPath { get; set; }
 
     public MapNode(Vector2 position, int indexX, int indexY)
     {

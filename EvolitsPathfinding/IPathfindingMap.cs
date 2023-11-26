@@ -44,7 +44,7 @@ public interface IPathfindingMap
     /// <param name="startPoint">Starting point of the path.</param>
     /// <param name="endPoint">Ending point of the path.</param>
     /// <returns>List of points on the path in order.</returns>
-    IList<Vector2> GetPath(Vector2 startPoint, Vector2 endPoint);
+    IEnumerable<Vector2> GetPath(Vector2 startPoint, Vector2 endPoint);
 
     /// <summary>
     /// Bakes an IObstacle into this IPathfindingMap with the current IMapBaker.
